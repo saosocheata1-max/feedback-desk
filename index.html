@@ -190,6 +190,22 @@ input[type=date]{-webkit-appearance:none;appearance:none;min-width:0;max-width:1
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;z-index:20;max-width:calc(100% - 32px)}
 .lightbox{position:fixed;inset:0;background:rgba(5,10,25,.88);display:grid;place-items:center;z-index:30;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));cursor:zoom-out}
 .lightbox img{max-height:90vh;max-width:100%;border-radius:8px}
+
+/* Feedback points: one screenshot + its own words and voice */
+.items{display:flex;flex-direction:column;gap:14px}
+.point{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--bg);display:flex;flex-direction:column;gap:12px}
+.point-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.point-no{width:28px;height:28px;border-radius:50%;background:var(--sun);color:var(--sun-ink);display:grid;place-items:center;font-family:var(--f-display);font-weight:800;flex:none}
+.point-grid{display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:start}
+.point-grid>*{min-width:0}
+.point-desc{display:flex;flex-direction:column;gap:12px}
+.point-desc textarea{min-height:90px}
+.point .drop{min-height:140px;display:grid;place-items:center}
+.shot{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--sunken)}
+.shot img{display:block;width:100%;max-height:320px;object-fit:contain}
+.shot button{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;font-size:16px;line-height:1}
+.addpoint{align-self:flex-start;border-style:dashed}
+@media (max-width:620px){.point-grid{grid-template-columns:1fr}.point .drop{min-height:90px}}
 </style>
 </head>
 <body>
@@ -222,7 +238,7 @@ input[type=date]{-webkit-appearance:none;appearance:none;min-width:0;max-width:1
 const SUPABASE_URL = "https://knpkikfxunpldljcfaql.supabase.co";
 const SUPABASE_KEY = "sb_publishable_IJNJM4HP7epJcclA3IGRng_JNxui_GC";
 const BUCKET = "feedback-media";
-const MAX_IMAGES = 4;
+const MAX_ITEMS = 5;
 const DIGEST_HOUR = 20; // 8 PM
 const STATUS = {new:"New", progress:"In progress", tackled:"Tackled"};
 
@@ -231,7 +247,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const S = {
   members:[], feedback:[], ready:{members:false,feedback:false}, offline:false,
   me:null, tab:"give", pinFor:null, pinErr:"",
-  draft:{ images:[], voice:null, voiceUrl:null, text:"", date:today() },
+  draft:{ items:[{image:null,text:"",voice:null,voiceUrl:null}], date:today() },
   filters:{ status:"open", person:"all" },
   digestDate: today(),
   busy:false, recording:null, confirm:null
@@ -364,39 +380,58 @@ function renderLogin(){
   $app.querySelectorAll(".person").forEach(b=>b.onclick=()=>{S.pinFor=b.dataset.id;S.pinErr="";render()});
 }
 
-/* ---------- give feedback ---------- */
+/* ---------- give feedback: up to 5 points, each with its own image, words and voice ---------- */
+function newItem(){return {image:null,text:"",voice:null,voiceUrl:null}}
 function giveHTML(){
   const d=S.draft;
   const mine=S.feedback.filter(f=>f.author_id===S.me.id);
   return `<div class="panel">
-    <div><h2>What should we improve?</h2><p class="sub">Show us with screenshots, then explain by typing, recording your voice, or both.</p></div>
+    <div><h2>What should we improve?</h2><p class="sub">Add one point per screenshot. Each point gets its own description, typed or spoken. You can send up to ${MAX_ITEMS} points at once.</p></div>
     <div class="grid2">
       <div class="field"><label class="lbl" for="f-name">Name</label><input type="text" value="${esc(S.me.name)}" disabled id="f-name"></div>
       <div class="field"><label class="lbl" for="f-date">Date</label><input type="date" id="f-date" value="${esc(d.date)}"></div>
     </div>
-    <div class="field"><label class="lbl">Screenshots or photos (up to ${MAX_IMAGES})</label>
-      <div class="drop" id="drop" tabindex="0" role="button">Tap to choose images, drag them here, or paste a screenshot</div>
-      <input type="file" id="f-img" accept="image/*" multiple hidden>
-      ${d.images.length?`<div class="thumbs" style="margin-top:10px">${d.images.map((im,i)=>`<div class="thumb"><img src="${im.preview}" alt="Attached image ${i+1}"><button type="button" data-rmimg="${i}" aria-label="Remove image">×</button></div>`).join("")}</div>`:""}
-    </div>
-    <div class="field"><label class="lbl" for="f-text">Description in words</label>
-      <textarea id="f-text" placeholder="What happened, what did you expect, and what would make it better?">${esc(d.text)}</textarea></div>
-    <div class="field"><label class="lbl">Description by voice</label>
-      <div class="voice" id="voice">${voiceInner()}</div>
-      <input type="file" id="f-voice" accept="audio/*,.m4a,.mp3,.wav,.ogg,.opus,.aac,.webm" hidden>
-    </div>
-    <div class="formfoot"><span class="status-line" id="sendmsg">${d.images.length||d.text||d.voice?"Ready when you are.":"Add a description in words or voice to send."}</span>
-      <button class="btn sun" id="send" type="button" ${S.busy?"disabled":""}>${S.busy?"Sending…":"Send feedback"}</button></div>
+    <div class="items">${d.items.map(itemHTML).join("")}</div>
+    ${d.items.length<MAX_ITEMS?`<button class="btn ghost addpoint" type="button" id="additem">+ Add another point <span class="mono">(${d.items.length} of ${MAX_ITEMS})</span></button>`:`<p class="status-line">That's the maximum of ${MAX_ITEMS} points. Send these first, then add more.</p>`}
+    <div class="formfoot"><span class="status-line" id="sendmsg">${readyText()}</span>
+      <button class="btn sun" id="send" type="button" ${S.busy?"disabled":""}>${S.busy?"Sending…":(d.items.length>1?`Send ${d.items.length} points`:"Send feedback")}</button></div>
   </div>
   <h3 class="section-title">Your recent feedback (${mine.length})</h3>
   ${mine.length?`<div class="list">${mine.slice(0,5).map(ticketHTML).join("")}</div>`:`<div class="empty"><h3>Nothing from you yet</h3><p>Your feedback shows up here after you send it, with its status.</p></div>`}`;
 }
+function readyText(){
+  const its=S.draft.items, ok=its.filter(it=>it.text.trim()||it.voice).length;
+  if(ok===its.length&&ok) return "Ready when you are.";
+  if(!ok&&its.length===1&&!its[0].image) return "Add a screenshot and describe it in words or voice.";
+  return "Each point needs a description in words or voice.";
+}
+function itemHTML(it,i){
+  const n=S.draft.items.length;
+  return `<section class="point" data-item="${i}">
+    <div class="point-head"><span class="point-no">${i+1}</span><b>Point ${i+1}</b>
+      ${n>1?`<button class="btn ghost small" type="button" data-rmitem="${i}" style="margin-left:auto">Remove point</button>`:""}</div>
+    <div class="point-grid">
+      <div class="point-img">
+        ${it.image?`<div class="shot"><img src="${it.image.preview}" alt="Screenshot for point ${i+1}"><button type="button" data-rmimg="${i}" aria-label="Remove image">×</button></div>`
+          :`<div class="drop" data-drop="${i}" tabindex="0" role="button">Tap to add a screenshot or photo</div>`}
+        <input type="file" id="img-${i}" accept="image/*" hidden>
+      </div>
+      <div class="point-desc">
+        <div class="field"><label class="lbl" for="text-${i}">Description in words</label>
+          <textarea id="text-${i}" data-text="${i}" placeholder="What's wrong here, and what would make it better?">${esc(it.text)}</textarea></div>
+        <div class="field"><label class="lbl">Description by voice</label>
+          <div class="voice" id="voice-${i}">${voiceInner(i)}</div>
+          <input type="file" id="vfile-${i}" accept="audio/*,.m4a,.mp3,.wav,.ogg,.opus,.aac,.webm" hidden></div>
+      </div>
+    </div>
+  </section>`;
+}
 const MIC=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
-function voiceInner(){
-  const d=S.draft;
-  if(S.recording) return `<span class="rec-dot"></span><span class="timer" id="rectime">0:00</span><span>Recording… talk now</span><button class="btn danger small" type="button" id="recstop">Stop</button>`;
-  if(d.voice) return `<audio controls src="${d.voiceUrl}"></audio><button class="btn ghost small" type="button" id="rmvoice">Delete</button><button class="btn ghost small" type="button" id="recstart">Record again</button><span class="hint">Voice note ready. Listen back, then send.</span>`;
-  return `<button class="btn primary small" type="button" id="recstart">${MIC}Record voice</button><button class="btn ghost small" type="button" id="pickvoice">Attach a voice memo</button><span class="hint" id="voicehint">The first time, your phone asks to allow the microphone. Tap Allow.</span>`;
+function voiceInner(i){
+  const it=S.draft.items[i];
+  if(S.recording&&S.recording.idx===i) return `<span class="rec-dot"></span><span class="timer" id="rectime">0:00</span><span>Recording… talk now</span><button class="btn danger small" type="button" id="recstop">Stop</button>`;
+  if(it.voice) return `<audio controls src="${it.voiceUrl}"></audio><button class="btn ghost small" type="button" data-rmvoice="${i}">Delete</button><button class="btn ghost small" type="button" data-rec="${i}">Record again</button>`;
+  return `<button class="btn primary small" type="button" data-rec="${i}">${MIC}Record voice</button><button class="btn ghost small" type="button" data-pickvoice="${i}">Attach a voice memo</button><span class="hint" id="vhint-${i}">${i===0?"The first time, your phone asks to allow the microphone. Tap Allow.":""}</span>`;
 }
 
 /* ---------- board ---------- */
@@ -539,19 +574,7 @@ function teamHTML(){
 /* ---------- events ---------- */
 function bind(){
   const q=id=>document.getElementById(id);
-  if(S.tab==="give"){
-    q("f-date").onchange=e=>{S.draft.date=e.target.value||today()};
-    q("f-text").oninput=e=>{S.draft.text=e.target.value;const m=q("sendmsg");if(m)m.textContent="Ready when you are."};
-    const drop=q("drop"),inp=q("f-img");
-    drop.onclick=()=>inp.click(); drop.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();inp.click()}};
-    inp.onchange=()=>addImages([...inp.files]);
-    drop.ondragover=e=>{e.preventDefault();drop.classList.add("over")};
-    drop.ondragleave=()=>drop.classList.remove("over");
-    drop.ondrop=e=>{e.preventDefault();drop.classList.remove("over");addImages([...e.dataTransfer.files])};
-    document.querySelectorAll("[data-rmimg]").forEach(b=>b.onclick=()=>{S.draft.images.splice(+b.dataset.rmimg,1);keepText();render()});
-    bindVoice();
-    q("send").onclick=send;
-  }
+  if(S.tab==="give") bindGive();
   if(S.tab==="board"){
     q("flt-status").onchange=e=>{S.filters.status=e.target.value;render()};
     q("flt-person").onchange=e=>{S.filters.person=e.target.value;render()};
@@ -564,11 +587,36 @@ function bind(){
   document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>ticketAction(b.dataset.act,b.dataset.id));
   document.querySelectorAll("[data-img]").forEach(a=>a.onclick=e=>{e.preventDefault();openLightbox(a.dataset.img)});
 }
-function keepText(){const t=document.getElementById("f-text");if(t)S.draft.text=t.value}
+function keepText(){document.querySelectorAll("[data-text]").forEach(t=>{const it=S.draft.items[+t.dataset.text];if(it)it.text=t.value})}
+function bindGive(){
+  const q=id=>document.getElementById(id);
+  q("f-date").onchange=e=>{S.draft.date=e.target.value||today()};
+  document.querySelectorAll("[data-text]").forEach(t=>t.oninput=()=>{S.draft.items[+t.dataset.text].text=t.value;const m=q("sendmsg");if(m)m.textContent=readyText()});
+  document.querySelectorAll("[data-drop]").forEach(drop=>{
+    const i=+drop.dataset.drop,inp=q("img-"+i);
+    drop.onclick=()=>inp.click(); drop.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();inp.click()}};
+    inp.onchange=()=>{if(inp.files[0])setImage(i,inp.files[0])};
+    drop.ondragover=e=>{e.preventDefault();drop.classList.add("over")};
+    drop.ondragleave=()=>drop.classList.remove("over");
+    drop.ondrop=e=>{e.preventDefault();drop.classList.remove("over");const f=[...e.dataTransfer.files].find(f=>f.type.startsWith("image/"));if(f)setImage(i,f)};
+  });
+  document.querySelectorAll("[data-rmimg]").forEach(b=>b.onclick=()=>{keepText();S.draft.items[+b.dataset.rmimg].image=null;render()});
+  document.querySelectorAll("[data-rmitem]").forEach(b=>b.onclick=()=>{keepText();S.draft.items.splice(+b.dataset.rmitem,1);render()});
+  document.querySelectorAll("[data-rec]").forEach(b=>b.onclick=()=>startRec(+b.dataset.rec));
+  document.querySelectorAll("[data-pickvoice]").forEach(b=>b.onclick=()=>q("vfile-"+b.dataset.pickvoice).click());
+  document.querySelectorAll("[data-rmvoice]").forEach(b=>b.onclick=()=>{keepText();const it=S.draft.items[+b.dataset.rmvoice];it.voice=null;it.voiceUrl=null;render()});
+  S.draft.items.forEach((it,i)=>{const v=q("vfile-"+i);if(v)v.onchange=()=>{if(v.files[0])setVoice(i,v.files[0],v.files[0].name)}});
+  const add=q("additem"); if(add) add.onclick=()=>{keepText();S.draft.items.push(newItem());render();setTimeout(()=>{const els=document.querySelectorAll(".point");els[els.length-1]?.scrollIntoView({behavior:"smooth",block:"start"})},50)};
+  q("send").onclick=send;
+}
 document.addEventListener("paste",e=>{
   if(S.tab!=="give"||!S.me) return;
-  const files=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith("image/"));
-  if(files.length){e.preventDefault();addImages(files)}
+  const f=[...(e.clipboardData?.files||[])].find(f=>f.type.startsWith("image/"));
+  if(!f) return;
+  e.preventDefault(); keepText();
+  let i=S.draft.items.findIndex(it=>!it.image);
+  if(i<0){ if(S.draft.items.length>=MAX_ITEMS){toast(`Up to ${MAX_ITEMS} points at a time`);return} S.draft.items.push(newItem()); i=S.draft.items.length-1; }
+  setImage(i,f);
 });
 function showCopyFallback(t){
   const ta=document.createElement("textarea");ta.value=t;ta.style.minHeight="240px";
@@ -582,12 +630,10 @@ function openLightbox(path){
 }
 
 /* images: shrink before upload */
-async function addImages(files){
+async function setImage(i,file){
   keepText();
-  for(const f of files.filter(f=>f.type.startsWith("image/"))){
-    if(S.draft.images.length>=MAX_IMAGES){toast(`Up to ${MAX_IMAGES} images per feedback`);break}
-    try{const blob=await shrink(f);S.draft.images.push({blob,preview:URL.createObjectURL(blob)})}catch(e){toast("Couldn't read one of the images")}
-  }
+  if(!file.type.startsWith("image/")){toast("That file isn't an image");return}
+  try{const blob=await shrink(file);S.draft.items[i].image={blob,preview:URL.createObjectURL(blob)}}catch(e){toast("Couldn't read that image")}
   render();
 }
 function shrink(file){
@@ -602,24 +648,18 @@ function shrink(file){
   });
 }
 
-/* voice: real microphone recording, sound only */
-function bindVoice(){
-  const q=id=>document.getElementById(id);
-  if(q("recstart")) q("recstart").onclick=startRec;
-  if(q("pickvoice")) q("pickvoice").onclick=()=>q("f-voice").click();
-  if(q("rmvoice")) q("rmvoice").onclick=()=>{keepText();S.draft.voice=null;S.draft.voiceUrl=null;render()};
-  q("f-voice").onchange=e=>{const f=e.target.files[0];if(f)setVoice(f,f.name)};
-}
-function setVoice(blob,name){keepText();S.draft.voice={blob,name};S.draft.voiceUrl=URL.createObjectURL(blob);render()}
-async function startRec(){
+/* voice: real microphone recording, sound only, one per point */
+function setVoice(i,blob,name){keepText();const it=S.draft.items[i];it.voice={blob,name};it.voiceUrl=URL.createObjectURL(blob);render()}
+async function startRec(i){
   keepText();
-  const hint=t=>{const h=document.getElementById("voicehint");if(h)h.textContent=t};
+  if(S.recording) return;
+  const hint=t=>{const h=document.getElementById("vhint-"+i);if(h)h.textContent=t};
   if(!navigator.mediaDevices||!window.MediaRecorder){hint("This browser can't record. Open the link in Safari or Chrome, or attach a voice memo.");return}
   let stream;
   try{stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false})}
   catch(e){
     hint(e&&e.name==="NotAllowedError"
-      ?"Microphone is blocked. On iPhone: Settings → Safari → Microphone → Allow (or tap “aA” in the address bar → Website Settings → Microphone → Allow), then reload."
+      ?"Microphone is blocked. Tap “aA” in the address bar → Website Settings → Microphone → Allow, then reload."
       :"Couldn't start the microphone. Close other apps using it and try again.");
     return;
   }
@@ -628,11 +668,11 @@ async function startRec(){
   rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
   rec.onstop=()=>{stream.getTracks().forEach(t=>t.stop());clearInterval(S.recording.tick);S.recording=null;
     const type=(rec.mimeType||mime||"audio/webm").split(";")[0];
-    setVoice(new Blob(chunks,{type}),"voice-note")};
+    setVoice(i,new Blob(chunks,{type}),"voice-note")};
   const t0=Date.now();
-  S.recording={rec,tick:setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);const el=document.getElementById("rectime");if(el)el.textContent=`${Math.floor(s/60)}:${pad(s%60)}`;if(s>=600)stopRec()},500)};
+  S.recording={idx:i,rec,tick:setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);const el=document.getElementById("rectime");if(el)el.textContent=`${Math.floor(s/60)}:${pad(s%60)}`;if(s>=600)stopRec()},500)};
   rec.start(1000);
-  document.getElementById("voice").innerHTML=voiceInner();
+  document.getElementById("voice-"+i).innerHTML=voiceInner(i);
   document.getElementById("recstop").onclick=stopRec;
 }
 function stopRec(){if(S.recording&&S.recording.rec.state!=="inactive")S.recording.rec.stop()}
@@ -649,25 +689,35 @@ async function upload(blob,kind,name){
   return path;
 }
 
+/* each point becomes its own feedback item, so it can be tackled on its own */
 async function send(){
   keepText();
   const d=S.draft,msg=t=>{const m=document.getElementById("sendmsg");if(m)m.textContent=t};
-  if(!d.text.trim()&&!d.voice){msg("Add a description in words or record your voice first.");return}
+  const missing=d.items.findIndex(it=>!it.text.trim()&&!it.voice);
+  if(missing>=0){msg(`Point ${missing+1} needs a description in words or voice.`);document.querySelectorAll(".point")[missing]?.scrollIntoView({behavior:"smooth",block:"start"});return}
   S.busy=true;render();
+  const total=d.items.length; let sent=0;
   try{
-    let voicePath=null;
-    if(d.voice){msg("Uploading voice…");voicePath=await upload(d.voice.blob,"voice",d.voice.name)}
-    const imagePaths=[];
-    for(let i=0;i<d.images.length;i++){msg(`Uploading image ${i+1} of ${d.images.length}…`);imagePaths.push(await upload(d.images[i].blob,"images"))}
-    msg("Saving…");
-    const {error}=await sb.from("feedback").insert({author_id:S.me.id,author_name:S.me.name,date:d.date||today(),text:d.text.trim(),images:imagePaths,voice:voicePath,status:"new"});
-    if(error) throw error;
-    S.draft={images:[],voice:null,voiceUrl:null,text:"",date:today()};
+    while(d.items.length){
+      const it=d.items[0], n=sent+1;
+      let voicePath=null, images=[];
+      if(it.image){msg(`Point ${n} of ${total}: uploading image…`);images=[await upload(it.image.blob,"images")]}
+      if(it.voice){msg(`Point ${n} of ${total}: uploading voice…`);voicePath=await upload(it.voice.blob,"voice",it.voice.name)}
+      msg(`Point ${n} of ${total}: saving…`);
+      const created=new Date(Date.now()+sent).toISOString();
+      const {error}=await sb.from("feedback").insert({author_id:S.me.id,author_name:S.me.name,date:d.date||today(),created_at:created,text:it.text.trim(),images,voice:voicePath,status:"new"});
+      if(error) throw error;
+      d.items.shift(); sent++;
+    }
+    S.draft={items:[newItem()],date:today()};
     await loadFeedback().catch(()=>{});
-    S.busy=false;render();toast("Feedback sent. Thank you!");
+    S.busy=false;render();toast(total>1?`${total} points sent. Thank you!`:"Feedback sent. Thank you!");
   }catch(e){
-    console.warn(e);S.busy=false;render();
-    msg(/size|large|exceed/i.test(e&&e.message||"")?"One of the files is too big (25 MB max). Try a shorter voice note or a smaller image.":"Couldn't send. Check your connection and try again.");
+    console.warn(e);
+    if(!d.items.length) d.items.push(newItem());
+    await loadFeedback().catch(()=>{});
+    S.busy=false;render();
+    msg((sent?`${sent} point(s) sent. The rest are still here. `:"")+(/size|large|exceed/i.test(e&&e.message||"")?"A file is too big (25 MB max). Try a shorter voice note or smaller image.":"Couldn't send. Check your connection and try again."));
   }
 }
 
