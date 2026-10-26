@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>App Feedback Desk</title>
+<meta name="theme-color" content="#0E2C73">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: deep-blue header band with a yellow edge; feedback lives on "ticket" cards with a perforated stub, like travel tickets. */
+:root{
+  --bg:#F2F5FB; --surface:#FFFFFF; --sunken:#E8EEF8; --ink:#0E1F3D; --muted:#55657F; --line:#D5DEEC;
+  --blue:#1B4FC4; --blue-deep:#0E2C73; --on-blue:#FFFFFF; --on-blue-muted:#B9C9EE;
+  --sun:#F7C531; --sun-soft:#FFF4CC; --sun-ink:#3B2C00;
+  --ok:#1C8456; --ok-soft:#DDF3E8; --warn:#A86500; --warn-soft:#FFF0D6; --bad:#C2363A; --bad-soft:#FBE3E3;
+  --shadow:0 1px 2px rgba(14,31,61,.06),0 6px 20px rgba(14,31,61,.07);
+  --f-display:"Bricolage Grotesque",ui-rounded,system-ui,sans-serif;
+  --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#08112A; --surface:#101C3A; --sunken:#0C1631; --ink:#E6ECFA; --muted:#97A6C4; --line:#22335B;
+  --blue:#7DA2FF; --blue-deep:#0B2463; --on-blue:#FFFFFF; --on-blue-muted:#AFC0EA;
+  --sun:#F7C531; --sun-soft:#3A3010; --sun-ink:#2B2000;
+  --ok:#4FC98F; --ok-soft:#0F3326; --warn:#F2B04A; --warn-soft:#3A2A0C; --bad:#FF7F82; --bad-soft:#3D1618;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#08112A; --surface:#101C3A; --sunken:#0C1631; --ink:#E6ECFA; --muted:#97A6C4; --line:#22335B;
+  --blue:#7DA2FF; --blue-deep:#0B2463; --on-blue:#FFFFFF; --on-blue-muted:#AFC0EA;
+  --sun:#F7C531; --sun-soft:#3A3010; --sun-ink:#2B2000;
+  --ok:#4FC98F; --ok-soft:#0F3326; --warn:#F2B04A; --warn-soft:#3A2A0C; --bad:#FF7F82; --bad-soft:#3D1618;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25); color-scheme:dark}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+img{max-width:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--blue-deep)}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.wrap{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* Header */
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--blue-deep);color:var(--on-blue);border-bottom:4px solid var(--sun)}
+.top .wrap{display:flex;align-items:center;gap:14px;padding-block:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto;min-width:0}
+.brand .mark{width:34px;height:34px;border-radius:50%;background:var(--sun);display:grid;place-items:center;flex:none}
+.brand h1{font-size:20px;font-weight:800;letter-spacing:-.01em}
+.brand small{display:block;font-size:12px;color:var(--on-blue-muted);font-family:var(--f-body);font-weight:500}
+.who{display:flex;align-items:center;gap:8px;font-size:14px}
+.who button{background:transparent;border:1px solid var(--on-blue-muted);color:var(--on-blue);border-radius:999px;padding:4px 12px;cursor:pointer}
+nav.tabs{display:flex;gap:4px;overflow-x:auto;padding-bottom:0}
+nav.tabs button{background:transparent;border:0;color:var(--on-blue-muted);padding:10px 14px;font-weight:600;cursor:pointer;border-radius:8px 8px 0 0;white-space:nowrap;position:relative}
+nav.tabs button[aria-selected="true"]{background:var(--bg);color:var(--ink)}
+nav.tabs .count{display:inline-block;margin-left:6px;background:var(--sun);color:var(--sun-ink);font-size:11px;border-radius:999px;padding:0 7px;font-weight:700}
+.tabrow{padding-top:2px}
+
+main{padding-block:24px 64px}
+.notice{border:1px solid var(--line);background:var(--sunken);border-radius:12px;padding:12px 14px;color:var(--muted);font-size:14px;margin-bottom:16px}
+.notice.sun{background:var(--sun-soft);border-color:var(--sun);color:var(--ink)}
+.notice b{color:var(--ink)}
+
+/* Buttons and fields */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:10px;padding:10px 16px;border:1px solid transparent;font-weight:600;cursor:pointer;text-decoration:none}
+.btn.primary{background:var(--blue);color:var(--on-blue)}
+:root[data-theme="dark"] .btn.primary{color:#08112A}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.primary{color:#08112A}}
+.btn.sun{background:var(--sun);color:var(--sun-ink)}
+.btn.ghost{background:transparent;border-color:var(--line);color:var(--ink)}
+.btn.small{padding:6px 11px;font-size:13px;border-radius:8px}
+.btn.danger{background:transparent;border-color:var(--bad);color:var(--bad)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+label.lbl{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px}
+input[type=text],input[type=date],input[type=password],select,textarea{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+textarea{min-height:120px;resize:vertical}
+input[type=date]{-webkit-appearance:none;appearance:none;min-width:0;max-width:100%;display:block;text-align:left;min-height:44px}
+.field{min-width:0}
+.field{display:flex;flex-direction:column}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+
+/* Login */
+.login{max-width:640px;margin:24px auto 0;text-align:center;display:flex;flex-direction:column;gap:18px}
+.login h2{font-size:30px;font-weight:800}
+.login p{margin:0;color:var(--muted)}
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
+.person{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:var(--shadow)}
+.person:hover{border-color:var(--blue)}
+.avatar{width:48px;height:48px;border-radius:50%;background:var(--blue);color:var(--on-blue);display:grid;place-items:center;font-family:var(--f-display);font-weight:800;font-size:20px;flex:none}
+.avatar.rev{background:var(--sun);color:var(--sun-ink)}
+.avatar.sm{width:28px;height:28px;font-size:13px}
+.role{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.pinbox{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:12px;text-align:left;box-shadow:var(--shadow)}
+.pinbox input{font-family:var(--f-mono);letter-spacing:.4em;font-size:22px;text-align:center}
+.err{color:var(--bad);font-size:14px;min-height:1.2em}
+
+/* Form */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:18px}
+.panel h2{font-size:24px;font-weight:800}
+.sub{color:var(--muted);margin:4px 0 0;font-size:14px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:18px;text-align:center;color:var(--muted);cursor:pointer;background:var(--sunken)}
+.drop.over{border-color:var(--blue);color:var(--ink)}
+.thumbs{display:flex;flex-wrap:wrap;gap:10px}
+.thumb{position:relative;width:96px;height:96px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--sunken)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb button{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;line-height:1}
+.voice{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--sunken);border:1px solid var(--line);border-radius:12px;padding:12px}
+.voice audio{max-width:100%;height:36px}
+.rec-dot{width:10px;height:10px;border-radius:50%;background:var(--bad);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.rec-dot{animation:none}}
+.timer{font-family:var(--f-mono);font-size:14px}
+.hint{font-size:13px;color:var(--muted);flex-basis:100%}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;cursor:pointer;font-size:14px;font-weight:500}
+.chip[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:var(--on-blue)}
+:root[data-theme="dark"] .chip[aria-pressed="true"]{color:#08112A}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .chip[aria-pressed="true"]{color:#08112A}}
+.formfoot{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;border-top:1px dashed var(--line);padding-top:16px}
+.status-line{color:var(--muted);font-size:14px}
+
+/* Board */
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:16px}
+.toolbar .field{min-width:150px;flex:1}
+.summary{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:flex;align-items:baseline;gap:8px}
+.stat b{font-family:var(--f-display);font-size:22px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:13px}
+.list{display:flex;flex-direction:column;gap:14px}
+
+.ticket{display:grid;grid-template-columns:1fr 150px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.ticket .body{padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.ticket .stub{border-left:2px dashed var(--line);background:var(--sunken);padding:14px;display:flex;flex-direction:column;gap:8px;align-items:flex-start;position:relative}
+.ticket .stub::before,.ticket .stub::after{content:"";position:absolute;left:-10px;width:18px;height:18px;border-radius:50%;background:var(--bg);border:1px solid var(--line)}
+.ticket .stub::before{top:-10px}.ticket .stub::after{bottom:-10px}
+.ticket.tackled{opacity:.86}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.meta .name{color:var(--ink);font-weight:700;font-size:14px}
+.tag{font-size:12px;font-weight:600;border-radius:6px;padding:2px 8px;background:var(--sunken);border:1px solid var(--line);color:var(--ink)}
+.prio-High{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.prio-Medium{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.prio-Low{background:var(--sunken)}
+.pill{font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px;text-transform:uppercase;letter-spacing:.05em}
+.st-new{background:var(--blue);color:var(--on-blue)}
+:root[data-theme="dark"] .st-new{color:#08112A}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .st-new{color:#08112A}}
+.st-progress{background:var(--sun);color:var(--sun-ink)}
+.st-tackled{background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok)}
+.text{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+.gallery{display:flex;flex-wrap:wrap;gap:8px}
+.gallery a{display:block;width:110px;height:110px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--sunken)}
+.gallery img{width:100%;height:100%;object-fit:cover;display:block}
+.ticket audio{width:100%;max-width:360px;height:36px}
+.mono{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.stub .date{font-family:var(--f-display);font-weight:800;font-size:22px;line-height:1}
+.stub .time{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.resolution{background:var(--ok-soft);border:1px solid var(--ok);border-radius:10px;padding:8px 12px;font-size:14px}
+.resolution b{color:var(--ok)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.inline-confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--sunken);border-radius:10px;padding:8px 10px;width:100%}
+.inline-confirm textarea{min-height:60px}
+.empty{text-align:center;padding:40px 16px;color:var(--muted);border:2px dashed var(--line);border-radius:16px}
+.empty h3{color:var(--ink);font-size:20px;margin-bottom:6px}
+@media (max-width:620px){
+  .ticket{grid-template-columns:1fr}
+  .ticket .stub{border-left:0;border-top:2px dashed var(--line);flex-direction:row;flex-wrap:wrap;align-items:center}
+  .ticket .stub::before,.ticket .stub::after{display:none}
+}
+
+/* Digest */
+.digest-head{display:flex;flex-wrap:wrap;gap:16px;align-items:end;justify-content:space-between;margin-bottom:16px}
+.clock{display:flex;align-items:center;gap:12px}
+.clock .big{font-family:var(--f-display);font-weight:800;font-size:40px;color:var(--blue);line-height:1}
+.window{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+.byperson{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:18px}
+.byperson .row{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.byperson .row b{margin-left:auto;font-family:var(--f-display);font-size:20px;font-variant-numeric:tabular-nums}
+.section-title{font-size:13px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:22px 0 10px}
+
+/* Team */
+.team{display:flex;flex-direction:column;gap:10px}
+.member{display:flex;flex-wrap:wrap;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.member .grow{flex:1;min-width:140px}
+.member .grow b{display:block}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;z-index:20;max-width:calc(100% - 32px)}
+.lightbox{position:fixed;inset:0;background:rgba(5,10,25,.88);display:grid;place-items:center;z-index:30;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));cursor:zoom-out}
+.lightbox img{max-height:90vh;max-width:100%;border-radius:8px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Z" fill="#0E2C73"/><circle cx="12" cy="9" r="2.6" fill="#F7C531"/></svg>
+      </div>
+      <div><h1>App Feedback Desk</h1><small>Tourism app · team feedback</small></div>
+    </div>
+    <div class="who" id="who" hidden></div>
+  </div>
+  <div class="wrap tabrow">
+    <nav class="tabs" id="tabs" role="tablist" hidden></nav>
+  </div>
+</header>
+
+<main class="wrap" id="app">
+  <div class="empty" id="boot">
+    <h3>Opening the feedback desk…</h3>
+    <p>Loading the team's feedback.</p>
+  </div>
+</main>
+
+<script src="supabase.js"></script>
+<script>
+(() => {
+"use strict";
+const SUPABASE_URL = "https://knpkikfxunpldljcfaql.supabase.co";
+const SUPABASE_KEY = "sb_publishable_IJNJM4HP7epJcclA3IGRng_JNxui_GC";
+const BUCKET = "feedback-media";
+const MAX_IMAGES = 4;
+const DIGEST_HOUR = 20; // 8 PM
+const STATUS = {new:"New", progress:"In progress", tackled:"Tackled"};
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const S = {
+  members:[], feedback:[], ready:{members:false,feedback:false}, offline:false,
+  me:null, tab:"give", pinFor:null, pinErr:"",
+  draft:{ images:[], voice:null, voiceUrl:null, text:"", date:today() },
+  filters:{ status:"open", person:"all" },
+  digestDate: today(),
+  busy:false, recording:null, confirm:null
+};
+const $app = document.getElementById("app");
+const $who = document.getElementById("who");
+const $tabs = document.getElementById("tabs");
+
+/* ---------- helpers ---------- */
+function pad(n){return String(n).padStart(2,"0")}
+function today(){const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function initial(n){return (n||"?").trim().charAt(0).toUpperCase()}
+function fmtDay(iso){const d=new Date(iso+"T00:00:00");return d.toLocaleDateString(undefined,{day:"numeric",month:"short"})}
+function fmtDate(iso){const d=new Date(iso+"T00:00:00");return d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short",year:"numeric"})}
+function fmtTime(ts){return new Date(ts).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})}
+function fmtStamp(ts){const d=new Date(ts);return d.toLocaleDateString(undefined,{day:"numeric",month:"short"})+" "+fmtTime(ts)}
+function ticketNo(f){const d=new Date(f.created_at);return `FB-${pad(d.getMonth()+1)}${pad(d.getDate())}-${(f.id||"").slice(0,4).toUpperCase()}`}
+function memberById(id){return S.members.find(m=>m.id===id)}
+function isReviewer(){return !!(S.me && S.me.role==="reviewer")}
+function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2600)}
+async function sha(s){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+function ls(k,v){try{ if(v===undefined) return localStorage.getItem(k); if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v);}catch(e){return null}}
+function mediaUrl(path){return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl}
+function slug(n){return n.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"member"}
+function rid(){return (crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2))}
+
+/* ---------- data ---------- */
+async function loadMembers(){
+  const {data,error}=await sb.from("members").select("*").order("created_at");
+  if(error) throw error;
+  S.members=data||[]; S.ready.members=true;
+  if(S.me){ S.me=memberById(S.me.id)||null; if(!S.me) ls("fd_me",null); }
+  else { const saved=ls("fd_me"); if(saved){ const m=memberById(saved); if(m&&m.pin_hash) S.me=m; } }
+}
+async function loadFeedback(){
+  const {data,error}=await sb.from("feedback").select("*").order("created_at",{ascending:false}).limit(1000);
+  if(error) throw error;
+  S.feedback=data||[]; S.ready.feedback=true;
+}
+async function refresh(){
+  try{ await Promise.all([loadMembers(),loadFeedback()]); S.offline=false; }
+  catch(e){ console.warn(e); S.offline=true; }
+  softRender();
+}
+async function boot(){
+  await refresh();
+  if(!S.ready.members){ $app.innerHTML=`<div class="empty"><h3>Can't reach the feedback database</h3><p>Check your internet connection and reload the page.</p></div>`; }
+  // live updates from teammates
+  try{
+    sb.channel("desk")
+      .on("postgres_changes",{event:"*",schema:"public",table:"feedback"},()=>loadFeedback().then(softRender).catch(()=>{}))
+      .on("postgres_changes",{event:"*",schema:"public",table:"members"},()=>loadMembers().then(softRender).catch(()=>{}))
+      .subscribe();
+  }catch(e){}
+  setInterval(()=>{ if(document.visibilityState==="visible") refresh(); },60000);
+  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") refresh(); });
+}
+
+/* ---------- render root ---------- */
+function softRender(){
+  if(S.recording) return;
+  const a=document.activeElement;
+  if(S.me && a && (a.tagName==="TEXTAREA"||(a.tagName==="INPUT"&&a.type!=="date"&&a.type!=="file"))){
+    if(!softRender.t){ softRender.t=1; a.addEventListener("blur",function h(){a.removeEventListener("blur",h);softRender.t=0;setTimeout(render,50)}); }
+    return;
+  }
+  if(!S.me && S.pinFor && a && a.tagName==="INPUT") return;
+  render();
+}
+function render(){
+  if(!S.ready.members) return;
+  if(S.recording) return;
+  if(!S.me){ $who.hidden=true; $tabs.hidden=true; renderLogin(); return; }
+  $who.hidden=false;
+  $who.innerHTML=`<div class="avatar sm ${S.me.role==="reviewer"?"rev":""}">${esc(initial(S.me.name))}</div><span>${esc(S.me.name)}</span><button id="logout" type="button">Switch</button>`;
+  document.getElementById("logout").onclick=()=>{S.me=null;ls("fd_me",null);S.tab="give";render()};
+  renderTabs();
+  const off=S.offline?`<div class="notice">You're offline or the connection dropped. Showing the last loaded feedback.</div>`:"";
+  if(S.tab==="board") $app.innerHTML=off+boardHTML();
+  else if(S.tab==="digest"&&isReviewer()) $app.innerHTML=off+digestHTML();
+  else if(S.tab==="team"&&isReviewer()) $app.innerHTML=off+teamHTML();
+  else { S.tab="give"; $app.innerHTML=off+giveHTML(); }
+  bind();
+}
+function renderTabs(){
+  const open=S.feedback.filter(f=>f.status!=="tackled").length;
+  const tabs=[["give","Give feedback"],["board",`Team board<span class="count">${open}</span>`]];
+  if(isReviewer()){tabs.push(["digest","8 PM digest"]);tabs.push(["team","Team accounts"]);}
+  $tabs.hidden=false;
+  $tabs.innerHTML=tabs.map(([k,l])=>`<button type="button" role="tab" data-tab="${k}" aria-selected="${S.tab===k}">${l}</button>`).join("");
+  $tabs.querySelectorAll("button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;S.confirm=null;render();window.scrollTo(0,0)});
+}
+
+/* ---------- login ---------- */
+function renderLogin(){
+  const m=S.pinFor?memberById(S.pinFor):null;
+  if(m){
+    const first=!m.pin_hash;
+    $app.innerHTML=`<div class="login">
+      <div class="avatar ${m.role==="reviewer"?"rev":""}" style="margin:0 auto;width:64px;height:64px;font-size:26px">${esc(initial(m.name))}</div>
+      <h2>${first?`Welcome, ${esc(m.name)}`:`Hi ${esc(m.name)}`}</h2>
+      <p>${first?"This is your first time here. Choose a 4-digit PIN so only you post under your name.":"Enter your 4-digit PIN."}</p>
+      <form class="pinbox" id="pinform">
+        <div class="field"><label class="lbl" for="pin">${first?"New PIN":"PIN"}</label><input type="password" id="pin" inputmode="numeric" maxlength="4" autocomplete="off"></div>
+        ${first?`<div class="field"><label class="lbl" for="pin2">Type it again</label><input type="password" id="pin2" inputmode="numeric" maxlength="4" autocomplete="off"></div>`:""}
+        <div class="err" id="pinerr">${esc(S.pinErr)}</div>
+        <div class="actions"><button class="btn primary" type="submit">${first?"Save PIN and continue":"Sign in"}</button><button class="btn ghost" type="button" id="back">Not ${esc(m.name)}?</button></div>
+      </form></div>`;
+    document.getElementById("back").onclick=()=>{S.pinFor=null;S.pinErr="";render()};
+    document.getElementById("pinform").onsubmit=async e=>{
+      e.preventDefault();
+      const p=document.getElementById("pin").value.trim();
+      const err=t=>{document.getElementById("pinerr").textContent=t};
+      if(!/^\d{4}$/.test(p)) return err("The PIN must be 4 digits.");
+      const h=await sha(m.id+":"+p);
+      if(first){
+        const p2=document.getElementById("pin2").value.trim();
+        if(p!==p2) return err("The two PINs don't match.");
+        const {error}=await sb.from("members").update({pin_hash:h}).eq("id",m.id);
+        if(error) return err("Couldn't save your PIN. Check your connection and try again.");
+      } else if(h!==m.pin_hash) return err("That PIN isn't right. Ask Cheata or Anthony to reset it if you forgot.");
+      S.me={...m,pin_hash:h}; ls("fd_me",m.id); S.pinFor=null; S.pinErr=""; S.tab="give";
+      await loadMembers().catch(()=>{}); render();
+    };
+    return;
+  }
+  $app.innerHTML=`<div class="login"><h2>Who's giving feedback?</h2><p>Pick your name to post feedback about the tourism app.</p>
+    <div class="people">${S.members.map(p=>`<button type="button" class="person" data-id="${p.id}"><div class="avatar ${p.role==="reviewer"?"rev":""}">${esc(initial(p.name))}</div><b>${esc(p.name)}</b><span class="role">${p.role==="reviewer"?"Reviewer":"Team"}</span></button>`).join("")}</div></div>`;
+  $app.querySelectorAll(".person").forEach(b=>b.onclick=()=>{S.pinFor=b.dataset.id;S.pinErr="";render()});
+}
+
+/* ---------- give feedback ---------- */
+function giveHTML(){
+  const d=S.draft;
+  const mine=S.feedback.filter(f=>f.author_id===S.me.id);
+  return `<div class="panel">
+    <div><h2>What should we improve?</h2><p class="sub">Show us with screenshots, then explain by typing, recording your voice, or both.</p></div>
+    <div class="grid2">
+      <div class="field"><label class="lbl" for="f-name">Name</label><input type="text" value="${esc(S.me.name)}" disabled id="f-name"></div>
+      <div class="field"><label class="lbl" for="f-date">Date</label><input type="date" id="f-date" value="${esc(d.date)}"></div>
+    </div>
+    <div class="field"><label class="lbl">Screenshots or photos (up to ${MAX_IMAGES})</label>
+      <div class="drop" id="drop" tabindex="0" role="button">Tap to choose images, drag them here, or paste a screenshot</div>
+      <input type="file" id="f-img" accept="image/*" multiple hidden>
+      ${d.images.length?`<div class="thumbs" style="margin-top:10px">${d.images.map((im,i)=>`<div class="thumb"><img src="${im.preview}" alt="Attached image ${i+1}"><button type="button" data-rmimg="${i}" aria-label="Remove image">×</button></div>`).join("")}</div>`:""}
+    </div>
+    <div class="field"><label class="lbl" for="f-text">Description in words</label>
+      <textarea id="f-text" placeholder="What happened, what did you expect, and what would make it better?">${esc(d.text)}</textarea></div>
+    <div class="field"><label class="lbl">Description by voice</label>
+      <div class="voice" id="voice">${voiceInner()}</div>
+      <input type="file" id="f-voice" accept="audio/*,.m4a,.mp3,.wav,.ogg,.opus,.aac,.webm" hidden>
+    </div>
+    <div class="formfoot"><span class="status-line" id="sendmsg">${d.images.length||d.text||d.voice?"Ready when you are.":"Add a description in words or voice to send."}</span>
+      <button class="btn sun" id="send" type="button" ${S.busy?"disabled":""}>${S.busy?"Sending…":"Send feedback"}</button></div>
+  </div>
+  <h3 class="section-title">Your recent feedback (${mine.length})</h3>
+  ${mine.length?`<div class="list">${mine.slice(0,5).map(ticketHTML).join("")}</div>`:`<div class="empty"><h3>Nothing from you yet</h3><p>Your feedback shows up here after you send it, with its status.</p></div>`}`;
+}
+const MIC=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+function voiceInner(){
+  const d=S.draft;
+  if(S.recording) return `<span class="rec-dot"></span><span class="timer" id="rectime">0:00</span><span>Recording… talk now</span><button class="btn danger small" type="button" id="recstop">Stop</button>`;
+  if(d.voice) return `<audio controls src="${d.voiceUrl}"></audio><button class="btn ghost small" type="button" id="rmvoice">Delete</button><button class="btn ghost small" type="button" id="recstart">Record again</button><span class="hint">Voice note ready. Listen back, then send.</span>`;
+  return `<button class="btn primary small" type="button" id="recstart">${MIC}Record voice</button><button class="btn ghost small" type="button" id="pickvoice">Attach a voice memo</button><span class="hint" id="voicehint">The first time, your phone asks to allow the microphone. Tap Allow.</span>`;
+}
+
+/* ---------- board ---------- */
+function filtered(){
+  const f=S.filters;
+  return S.feedback.filter(x=>{
+    if(f.status==="open"&&x.status==="tackled") return false;
+    if(f.status!=="open"&&f.status!=="all"&&x.status!==f.status) return false;
+    if(f.person!=="all"&&x.author_id!==f.person) return false;
+    return true;
+  });
+}
+function boardHTML(){
+  const all=S.feedback,f=S.filters,list=filtered();
+  const c=k=>all.filter(x=>x.status===k).length;
+  return `<div class="summary">
+    <div class="stat"><b>${all.length}</b><span>total</span></div>
+    <div class="stat"><b>${c("new")}</b><span>new</span></div>
+    <div class="stat"><b>${c("progress")}</b><span>in progress</span></div>
+    <div class="stat"><b>${c("tackled")}</b><span>tackled</span></div></div>
+  <div class="toolbar">
+    <div class="field"><label class="lbl" for="flt-status">Status</label><select id="flt-status">
+      ${[["open","Not tackled yet"],["all","Everything"],["new","New"],["progress","In progress"],["tackled","Tackled"]].map(([v,l])=>`<option value="${v}" ${f.status===v?"selected":""}>${l}</option>`).join("")}</select></div>
+    <div class="field"><label class="lbl" for="flt-person">From</label><select id="flt-person"><option value="all">Everyone</option>
+      ${S.members.map(m=>`<option value="${m.id}" ${f.person===m.id?"selected":""}>${esc(m.name)}</option>`).join("")}</select></div>
+  </div>
+  ${list.length?`<div class="list">${list.map(ticketHTML).join("")}</div>`:
+    `<div class="empty"><h3>${all.length?"Nothing matches these filters":"No feedback yet"}</h3><p>${all.length?"Try “Everything” to include tackled items.":"Feedback the team sends from the “Give feedback” tab shows up here."}</p></div>`}`;
+}
+function ticketHTML(f){
+  const st=f.status||"new";
+  const canDel=isReviewer()||(f.author_id===S.me.id&&st==="new");
+  const conf=S.confirm&&S.confirm.id===f.id?S.confirm:null;
+  let actions="";
+  if(conf&&conf.kind==="tackle"){
+    actions=`<div class="inline-confirm"><div class="field" style="flex:1;min-width:200px"><label class="lbl" for="note-${f.id}">What was done? (optional)</label><textarea id="note-${f.id}" placeholder="e.g. Fixed the map pin overlap in build 0.4"></textarea></div>
+      <button class="btn primary small" type="button" data-act="tackle-ok" data-id="${f.id}">Mark tackled</button><button class="btn ghost small" type="button" data-act="cancel">Cancel</button></div>`;
+  } else if(conf&&conf.kind==="delete"){
+    actions=`<div class="inline-confirm"><span>Delete this feedback for everyone?</span><button class="btn danger small" type="button" data-act="del-ok" data-id="${f.id}">Delete</button><button class="btn ghost small" type="button" data-act="cancel">Keep it</button></div>`;
+  } else {
+    const r=[];
+    if(isReviewer()){
+      if(st==="new") r.push(`<button class="btn ghost small" type="button" data-act="progress" data-id="${f.id}">Start working on it</button>`);
+      if(st!=="tackled") r.push(`<button class="btn primary small" type="button" data-act="tackle" data-id="${f.id}">Mark tackled</button>`);
+      else r.push(`<button class="btn ghost small" type="button" data-act="reopen" data-id="${f.id}">Reopen</button>`);
+    }
+    if(canDel) r.push(`<button class="btn ghost small" type="button" data-act="delete" data-id="${f.id}">Delete</button>`);
+    actions=r.length?`<div class="actions">${r.join("")}</div>`:"";
+  }
+  const author=memberById(f.author_id);
+  const name=author?author.name:(f.author_name||"Former member");
+  const imgs=f.images||[];
+  return `<article class="ticket ${st==="tackled"?"tackled":""}">
+    <div class="body">
+      <div class="meta"><div class="avatar sm ${author&&author.role==="reviewer"?"rev":""}">${esc(initial(name))}</div><span class="name">${esc(name)}</span></div>
+      ${f.text?`<p class="text">${esc(f.text)}</p>`:""}
+      ${f.voice?`<audio controls preload="metadata" src="${esc(mediaUrl(f.voice))}"></audio>`:""}
+      ${imgs.length?`<div class="gallery">${imgs.map(p=>`<a href="#" data-img="${esc(p)}"><img loading="lazy" src="${esc(mediaUrl(p))}" alt="Feedback screenshot"></a>`).join("")}</div>`:""}
+      ${st==="tackled"?`<div class="resolution"><b>Tackled</b> by ${esc((memberById(f.tackled_by)||{}).name||"a reviewer")}${f.tackled_at?" · "+esc(fmtStamp(f.tackled_at)):""}${f.note?`<br>${esc(f.note)}`:""}</div>`:""}
+      ${actions}
+    </div>
+    <div class="stub">
+      <span class="pill st-${st}">${STATUS[st]}</span>
+      <span class="date">${esc(fmtDay(f.date||today()))}</span>
+      <span class="time">sent ${esc(fmtTime(f.created_at))}</span>
+      <span class="mono">${esc(ticketNo(f))}</span>
+    </div></article>`;
+}
+
+/* ---------- digest ---------- */
+function digestWindow(dateStr){
+  const end=new Date(dateStr+"T00:00:00"); end.setHours(DIGEST_HOUR,0,0,0);
+  const start=new Date(end); start.setDate(start.getDate()-1);
+  return {start,end};
+}
+function digestItems(dateStr){
+  const {start,end}=digestWindow(dateStr);
+  return S.feedback.filter(f=>{const t=new Date(f.created_at);return t>=start&&t<end}).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+}
+function digestHTML(){
+  const {start,end}=digestWindow(S.digestDate);
+  const items=digestItems(S.digestDate);
+  const running=new Date()<end;
+  const olderOpen=S.feedback.filter(f=>f.status!=="tackled"&&new Date(f.created_at)<start);
+  const tackledIn=S.feedback.filter(f=>f.tackled_at&&new Date(f.tackled_at)>=start&&new Date(f.tackled_at)<end);
+  const counts=S.members.map(m=>({m,n:items.filter(f=>f.author_id===m.id).length}));
+  return `<div class="digest-head">
+      <div><h2 style="font-size:26px">Daily 8 PM digest</h2><p class="sub">All feedback sent in the 24 hours before 8 PM on the chosen day.</p>
+      <p class="window">${esc(fmtStamp(start))} → ${esc(fmtStamp(end))}</p></div>
+      <div class="actions"><div class="field"><label class="lbl" for="dg-date">Digest day</label><input type="date" id="dg-date" value="${esc(S.digestDate)}"></div>
+      <button class="btn sun" type="button" id="dg-copy" style="align-self:end">Copy digest</button></div>
+    </div>
+    ${running?`<div class="notice sun"><b>Still collecting.</b> This digest closes at 8:00 PM. Feedback sent after that goes into the next day's digest.</div>`:""}
+    <div class="summary">
+      <div class="stat"><b>${items.length}</b><span>new feedback</span></div>
+      <div class="stat"><b>${tackledIn.length}</b><span>tackled in this window</span></div>
+      <div class="stat"><b>${olderOpen.length}</b><span>older items still open</span></div></div>
+    <h3 class="section-title">Who sent feedback</h3>
+    <div class="byperson">${counts.map(({m,n})=>`<div class="row"><div class="avatar sm ${m.role==="reviewer"?"rev":""}">${esc(initial(m.name))}</div><span>${esc(m.name)}</span><b>${n}</b></div>`).join("")}</div>
+    <h3 class="section-title">Feedback in this digest</h3>
+    ${items.length?`<div class="list">${items.map(ticketHTML).join("")}</div>`:`<div class="empty"><h3>No feedback in this window</h3><p>Pick another day, or check the team board for everything.</p></div>`}`;
+}
+function digestText(){
+  const {start,end}=digestWindow(S.digestDate);
+  const items=digestItems(S.digestDate);
+  const lines=[`TOURISM APP — DAILY FEEDBACK DIGEST`,`${fmtDate(S.digestDate)} (8 PM cut-off)`,`Window: ${fmtStamp(start)} → ${fmtStamp(end)}`,`Total: ${items.length}`,""];
+  items.forEach((f,i)=>{
+    const n=(memberById(f.author_id)||{}).name||f.author_name||"?";
+    lines.push(`${i+1}. ${n} (${fmtTime(f.created_at)}) — ${STATUS[f.status||"new"]}`);
+    if(f.text) lines.push("   "+f.text.replace(/\n+/g," "));
+    const extra=[]; if(f.images&&f.images.length) extra.push(`${f.images.length} image(s)`); if(f.voice) extra.push("voice note");
+    if(extra.length) lines.push("   + "+extra.join(", "));
+  });
+  return lines.join("\n");
+}
+
+/* ---------- team ---------- */
+function teamHTML(){
+  const conf=S.confirm;
+  return `<div class="panel" style="margin-bottom:20px">
+    <div><h2>Add a team account</h2><p class="sub">New members choose their own PIN the first time they sign in.</p></div>
+    <div class="grid2"><div class="field"><label class="lbl" for="nm-name">Name</label><input type="text" id="nm-name" placeholder="e.g. Sophea"></div>
+    <div class="field"><label class="lbl" for="nm-role">Role</label><select id="nm-role"><option value="member">Team member: gives feedback</option><option value="reviewer">Reviewer: also runs the digest and marks tackled</option></select></div></div>
+    <div class="formfoot"><span class="status-line" id="nm-msg"></span><button class="btn primary" type="button" id="nm-add">Create account</button></div>
+  </div>
+  <h3 class="section-title">Accounts (${S.members.length})</h3>
+  <div class="team">${S.members.map(m=>{
+    const n=S.feedback.filter(f=>f.author_id===m.id).length;
+    const c=conf&&conf.id===m.id?conf.kind:null;
+    return `<div class="member"><div class="avatar ${m.role==="reviewer"?"rev":""}">${esc(initial(m.name))}</div>
+      <div class="grow"><b>${esc(m.name)}${m.id===S.me.id?" (you)":""}</b><span class="role">${m.role==="reviewer"?"Reviewer":"Team member"} · ${n} feedback · ${m.pin_hash?"PIN set":"No PIN yet"}</span></div>
+      ${c==="remove"?`<span>Remove ${esc(m.name)}? Their feedback stays.</span><button class="btn danger small" type="button" data-mact="remove-ok" data-id="${m.id}">Remove</button><button class="btn ghost small" type="button" data-mact="cancel">Cancel</button>`:
+      `<div class="actions">
+        <button class="btn ghost small" type="button" data-mact="role" data-id="${m.id}" ${m.id===S.me.id?"disabled":""}>${m.role==="reviewer"?"Make team member":"Make reviewer"}</button>
+        <button class="btn ghost small" type="button" data-mact="reset" data-id="${m.id}" ${m.pin_hash?"":"disabled"}>Reset PIN</button>
+        <button class="btn ghost small" type="button" data-mact="remove" data-id="${m.id}" ${m.id===S.me.id?"disabled":""}>Remove</button></div>`}
+    </div>`}).join("")}</div>`;
+}
+
+/* ---------- events ---------- */
+function bind(){
+  const q=id=>document.getElementById(id);
+  if(S.tab==="give"){
+    q("f-date").onchange=e=>{S.draft.date=e.target.value||today()};
+    q("f-text").oninput=e=>{S.draft.text=e.target.value;const m=q("sendmsg");if(m)m.textContent="Ready when you are."};
+    const drop=q("drop"),inp=q("f-img");
+    drop.onclick=()=>inp.click(); drop.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();inp.click()}};
+    inp.onchange=()=>addImages([...inp.files]);
+    drop.ondragover=e=>{e.preventDefault();drop.classList.add("over")};
+    drop.ondragleave=()=>drop.classList.remove("over");
+    drop.ondrop=e=>{e.preventDefault();drop.classList.remove("over");addImages([...e.dataTransfer.files])};
+    document.querySelectorAll("[data-rmimg]").forEach(b=>b.onclick=()=>{S.draft.images.splice(+b.dataset.rmimg,1);keepText();render()});
+    bindVoice();
+    q("send").onclick=send;
+  }
+  if(S.tab==="board"){
+    q("flt-status").onchange=e=>{S.filters.status=e.target.value;render()};
+    q("flt-person").onchange=e=>{S.filters.person=e.target.value;render()};
+  }
+  if(S.tab==="digest"){
+    q("dg-date").onchange=e=>{S.digestDate=e.target.value||today();render()};
+    q("dg-copy").onclick=async()=>{const t=digestText();try{await navigator.clipboard.writeText(t);toast("Digest copied")}catch(e){showCopyFallback(t)}};
+  }
+  if(S.tab==="team") bindTeam();
+  document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>ticketAction(b.dataset.act,b.dataset.id));
+  document.querySelectorAll("[data-img]").forEach(a=>a.onclick=e=>{e.preventDefault();openLightbox(a.dataset.img)});
+}
+function keepText(){const t=document.getElementById("f-text");if(t)S.draft.text=t.value}
+document.addEventListener("paste",e=>{
+  if(S.tab!=="give"||!S.me) return;
+  const files=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith("image/"));
+  if(files.length){e.preventDefault();addImages(files)}
+});
+function showCopyFallback(t){
+  const ta=document.createElement("textarea");ta.value=t;ta.style.minHeight="240px";
+  const box=document.createElement("div");box.className="notice";box.innerHTML="<b>Copy didn't work here.</b> Select the text below and copy it.";box.appendChild(ta);
+  $app.prepend(box);ta.focus();ta.select();
+}
+function openLightbox(path){
+  const lb=document.createElement("div");lb.className="lightbox";lb.innerHTML=`<img src="${esc(mediaUrl(path))}" alt="Feedback screenshot, full size">`;
+  lb.onclick=()=>lb.remove();document.addEventListener("keydown",function k(e){if(e.key==="Escape"){lb.remove();document.removeEventListener("keydown",k)}});
+  document.body.appendChild(lb);
+}
+
+/* images: shrink before upload */
+async function addImages(files){
+  keepText();
+  for(const f of files.filter(f=>f.type.startsWith("image/"))){
+    if(S.draft.images.length>=MAX_IMAGES){toast(`Up to ${MAX_IMAGES} images per feedback`);break}
+    try{const blob=await shrink(f);S.draft.images.push({blob,preview:URL.createObjectURL(blob)})}catch(e){toast("Couldn't read one of the images")}
+  }
+  render();
+}
+function shrink(file){
+  return new Promise((res,rej)=>{
+    if(file.type==="image/gif"||file.size<400*1024){res(file);return}
+    const url=URL.createObjectURL(file),img=new Image();
+    img.onload=()=>{const max=1800;let{width:w,height:h}=img;const s=Math.min(1,max/Math.max(w,h));w=Math.round(w*s);h=Math.round(h*s);
+      const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);
+      c.toBlob(b=>{URL.revokeObjectURL(url);b?res(b):rej()},"image/jpeg",.85)};
+    img.onerror=()=>{URL.revokeObjectURL(url);res(file)};
+    img.src=url;
+  });
+}
+
+/* voice: real microphone recording, sound only */
+function bindVoice(){
+  const q=id=>document.getElementById(id);
+  if(q("recstart")) q("recstart").onclick=startRec;
+  if(q("pickvoice")) q("pickvoice").onclick=()=>q("f-voice").click();
+  if(q("rmvoice")) q("rmvoice").onclick=()=>{keepText();S.draft.voice=null;S.draft.voiceUrl=null;render()};
+  q("f-voice").onchange=e=>{const f=e.target.files[0];if(f)setVoice(f,f.name)};
+}
+function setVoice(blob,name){keepText();S.draft.voice={blob,name};S.draft.voiceUrl=URL.createObjectURL(blob);render()}
+async function startRec(){
+  keepText();
+  const hint=t=>{const h=document.getElementById("voicehint");if(h)h.textContent=t};
+  if(!navigator.mediaDevices||!window.MediaRecorder){hint("This browser can't record. Open the link in Safari or Chrome, or attach a voice memo.");return}
+  let stream;
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false})}
+  catch(e){
+    hint(e&&e.name==="NotAllowedError"
+      ?"Microphone is blocked. On iPhone: Settings → Safari → Microphone → Allow (or tap “aA” in the address bar → Website Settings → Microphone → Allow), then reload."
+      :"Couldn't start the microphone. Close other apps using it and try again.");
+    return;
+  }
+  const mime=["audio/mp4","audio/webm;codecs=opus","audio/webm","audio/ogg"].find(t=>MediaRecorder.isTypeSupported(t))||"";
+  const rec=new MediaRecorder(stream,mime?{mimeType:mime}:undefined),chunks=[];
+  rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+  rec.onstop=()=>{stream.getTracks().forEach(t=>t.stop());clearInterval(S.recording.tick);S.recording=null;
+    const type=(rec.mimeType||mime||"audio/webm").split(";")[0];
+    setVoice(new Blob(chunks,{type}),"voice-note")};
+  const t0=Date.now();
+  S.recording={rec,tick:setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);const el=document.getElementById("rectime");if(el)el.textContent=`${Math.floor(s/60)}:${pad(s%60)}`;if(s>=600)stopRec()},500)};
+  rec.start(1000);
+  document.getElementById("voice").innerHTML=voiceInner();
+  document.getElementById("recstop").onclick=stopRec;
+}
+function stopRec(){if(S.recording&&S.recording.rec.state!=="inactive")S.recording.rec.stop()}
+function extFor(type,name){
+  const fromName=(name||"").includes(".")?name.split(".").pop().toLowerCase():"";
+  if(fromName&&fromName.length<=5) return fromName;
+  return ({"audio/mp4":"m4a","audio/webm":"webm","audio/ogg":"ogg","audio/mpeg":"mp3","audio/wav":"wav","image/jpeg":"jpg","image/png":"png","image/gif":"gif","image/webp":"webp","image/heic":"heic"})[type]||"bin";
+}
+async function upload(blob,kind,name){
+  const type=(blob.type||"application/octet-stream").split(";")[0];
+  const path=`${kind}/${today()}/${rid()}.${extFor(type,name)}`;
+  const {error}=await sb.storage.from(BUCKET).upload(path,blob,{contentType:type,upsert:false});
+  if(error) throw error;
+  return path;
+}
+
+async function send(){
+  keepText();
+  const d=S.draft,msg=t=>{const m=document.getElementById("sendmsg");if(m)m.textContent=t};
+  if(!d.text.trim()&&!d.voice){msg("Add a description in words or record your voice first.");return}
+  S.busy=true;render();
+  try{
+    let voicePath=null;
+    if(d.voice){msg("Uploading voice…");voicePath=await upload(d.voice.blob,"voice",d.voice.name)}
+    const imagePaths=[];
+    for(let i=0;i<d.images.length;i++){msg(`Uploading image ${i+1} of ${d.images.length}…`);imagePaths.push(await upload(d.images[i].blob,"images"))}
+    msg("Saving…");
+    const {error}=await sb.from("feedback").insert({author_id:S.me.id,author_name:S.me.name,date:d.date||today(),text:d.text.trim(),images:imagePaths,voice:voicePath,status:"new"});
+    if(error) throw error;
+    S.draft={images:[],voice:null,voiceUrl:null,text:"",date:today()};
+    await loadFeedback().catch(()=>{});
+    S.busy=false;render();toast("Feedback sent. Thank you!");
+  }catch(e){
+    console.warn(e);S.busy=false;render();
+    msg(/size|large|exceed/i.test(e&&e.message||"")?"One of the files is too big (25 MB max). Try a shorter voice note or a smaller image.":"Couldn't send. Check your connection and try again.");
+  }
+}
+
+async function ticketAction(act,id){
+  try{
+    if(act==="cancel"){S.confirm=null;render();return}
+    if(act==="tackle"){S.confirm={id,kind:"tackle"};render();return}
+    if(act==="delete"){S.confirm={id,kind:"delete"};render();return}
+    let r;
+    if(act==="progress") r=await sb.from("feedback").update({status:"progress"}).eq("id",id);
+    if(act==="reopen") r=await sb.from("feedback").update({status:"new",tackled_by:null,tackled_at:null,note:""}).eq("id",id);
+    if(act==="tackle-ok"){const note=(document.getElementById("note-"+id)?.value||"").trim();S.confirm=null;
+      r=await sb.from("feedback").update({status:"tackled",tackled_by:S.me.id,tackled_at:new Date().toISOString(),note}).eq("id",id);if(!r.error)toast("Marked as tackled")}
+    if(act==="del-ok"){const f=S.feedback.find(x=>x.id===id);S.confirm=null;
+      r=await sb.from("feedback").delete().eq("id",id);
+      if(!r.error&&f){const paths=[...(f.images||[]),f.voice].filter(Boolean);if(paths.length)await sb.storage.from(BUCKET).remove(paths).catch(()=>{});toast("Feedback deleted")}}
+    if(r&&r.error) throw r.error;
+    await loadFeedback();
+  }catch(e){console.warn(e);toast("Couldn't update. Check your connection.")}
+  render();
+}
+function bindTeam(){
+  const q=id=>document.getElementById(id);
+  q("nm-add").onclick=async()=>{
+    const n=q("nm-name").value.trim(),role=q("nm-role").value;
+    if(!n){q("nm-msg").textContent="Type a name first.";return}
+    if(S.members.some(m=>m.name.toLowerCase()===n.toLowerCase())){q("nm-msg").textContent=`There's already an account named ${n}.`;return}
+    let id=slug(n);if(memberById(id))id+="-"+Date.now().toString(36).slice(-4);
+    const {error}=await sb.from("members").insert({id,name:n,role});
+    if(error){q("nm-msg").textContent="Couldn't create the account. Check your connection.";return}
+    toast(`Account created for ${n}`);await loadMembers();render();
+  };
+  document.querySelectorAll("[data-mact]").forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.id,a=b.dataset.mact,m=memberById(id);
+    try{
+      let r;
+      if(a==="cancel"){S.confirm=null;render();return}
+      if(a==="remove"){S.confirm={id,kind:"remove"};render();return}
+      if(a==="remove-ok"){S.confirm=null;r=await sb.from("members").delete().eq("id",id);if(!r.error)toast(`${m.name} removed`)}
+      if(a==="role") r=await sb.from("members").update({role:m.role==="reviewer"?"member":"reviewer"}).eq("id",id);
+      if(a==="reset"){r=await sb.from("members").update({pin_hash:null}).eq("id",id);if(!r.error)toast(`${m.name} will choose a new PIN next sign-in`)}
+      if(r&&r.error) throw r.error;
+      await loadMembers();
+    }catch(e){toast("Couldn't update the account.")}
+    render();
+  });
+}
+
+boot();
+})();
+</script>
+
+</body>
+</html>
