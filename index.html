@@ -206,6 +206,21 @@ input[type=date]{-webkit-appearance:none;appearance:none;min-width:0;max-width:1
 .shot button{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;font-size:16px;line-height:1}
 .addpoint{align-self:flex-start;border-style:dashed}
 @media (max-width:620px){.point-grid{grid-template-columns:1fr}.point .drop{min-height:90px}}
+
+/* Questions & answers on a feedback item */
+.thread{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:10px}
+.thread-title{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.cmt{display:flex;gap:10px;align-items:flex-start}
+.cmt-body{background:var(--sunken);border:1px solid var(--line);border-radius:4px 12px 12px 12px;padding:8px 12px;min-width:0;flex:1;display:flex;flex-direction:column;gap:6px}
+.cmt.from-reviewer .cmt-body{background:var(--sun-soft);border-color:var(--sun)}
+.cmt-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;font-size:13px;color:var(--muted)}
+.cmt-meta b{color:var(--ink)}
+.cmt audio{width:100%;max-width:320px;height:36px}
+.linkbtn{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:12px;margin-left:auto}
+.composer{display:flex;flex-direction:column;gap:10px;background:var(--sunken);border:1px solid var(--line);border-radius:12px;padding:12px}
+.composer textarea{min-height:70px}
+.st-question{background:var(--sun-soft);color:var(--ink);border:1px solid var(--sun)}
+.qbanner{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 </style>
 </head>
 <body>
@@ -250,7 +265,8 @@ const S = {
   draft:{ items:[{image:null,text:"",voice:null,voiceUrl:null}], date:today() },
   filters:{ status:"open", person:"all" },
   digestDate: today(),
-  busy:false, recording:null, confirm:null
+  busy:false, recording:null, confirm:null,
+  comments:[], cdraft:{}, composer:null, cbusy:false
 };
 const $app = document.getElementById("app");
 const $who = document.getElementById("who");
@@ -288,8 +304,13 @@ async function loadFeedback(){
   if(error) throw error;
   S.feedback=data||[]; S.ready.feedback=true;
 }
+async function loadComments(){
+  const {data,error}=await sb.from("comments").select("*").order("created_at").limit(3000);
+  if(error){ S.commentsOff=true; return; }   // table not created yet
+  S.comments=data||[]; S.commentsOff=false;
+}
 async function refresh(){
-  try{ await Promise.all([loadMembers(),loadFeedback()]); S.offline=false; }
+  try{ await Promise.all([loadMembers(),loadFeedback(),loadComments()]); S.offline=false; }
   catch(e){ console.warn(e); S.offline=true; }
   softRender();
 }
@@ -300,6 +321,7 @@ async function boot(){
   try{
     sb.channel("desk")
       .on("postgres_changes",{event:"*",schema:"public",table:"feedback"},()=>loadFeedback().then(softRender).catch(()=>{}))
+      .on("postgres_changes",{event:"*",schema:"public",table:"comments"},()=>loadComments().then(softRender).catch(()=>{}))
       .on("postgres_changes",{event:"*",schema:"public",table:"members"},()=>loadMembers().then(softRender).catch(()=>{}))
       .subscribe();
   }catch(e){}
@@ -335,7 +357,8 @@ function render(){
 }
 function renderTabs(){
   const open=S.feedback.filter(f=>f.status!=="tackled").length;
-  const tabs=[["give","Give feedback"],["board",`Team board<span class="count">${open}</span>`]];
+  const myQ=S.me&&!S.commentsOff?questionsForMe().length:0;
+  const tabs=[["give",`Give feedback${myQ?`<span class="count">${myQ}</span>`:""}`],["board",`Team board<span class="count">${open}</span>`]];
   if(isReviewer()){tabs.push(["digest","8 PM digest"]);tabs.push(["team","Team accounts"]);}
   $tabs.hidden=false;
   $tabs.innerHTML=tabs.map(([k,l])=>`<button type="button" role="tab" data-tab="${k}" aria-selected="${S.tab===k}">${l}</button>`).join("");
@@ -385,7 +408,9 @@ function newItem(){return {image:null,text:"",voice:null,voiceUrl:null}}
 function giveHTML(){
   const d=S.draft;
   const mine=S.feedback.filter(f=>f.author_id===S.me.id);
-  return `<div class="panel">
+  const qs=S.commentsOff?[]:questionsForMe();
+  return `${qs.length?`<div class="notice sun qbanner"><span><b>${qs.length===1?"1 question":qs.length+" questions"} for you.</b> Cheata or Anthony need more detail on your feedback before they can fix it.</span><button class="btn primary small" type="button" id="goto-questions">Answer now</button></div>`:""}
+  <div class="panel">
     <div><h2>What should we improve?</h2><p class="sub">Add one point per screenshot. Each point gets its own description, typed or spoken. You can send up to ${MAX_ITEMS} points at once.</p></div>
     <div class="grid2">
       <div class="field"><label class="lbl" for="f-name">Name</label><input type="text" value="${esc(S.me.name)}" disabled id="f-name"></div>
@@ -420,24 +445,31 @@ function itemHTML(it,i){
         <div class="field"><label class="lbl" for="text-${i}">Description in words</label>
           <textarea id="text-${i}" data-text="${i}" placeholder="What's wrong here, and what would make it better?">${esc(it.text)}</textarea></div>
         <div class="field"><label class="lbl">Description by voice</label>
-          <div class="voice" id="voice-${i}">${voiceInner(i)}</div>
-          <input type="file" id="vfile-${i}" accept="audio/*,.m4a,.mp3,.wav,.ogg,.opus,.aac,.webm" hidden></div>
+          ${voiceBox("i"+i,i===0?"The first time, your phone asks to allow the microphone. Tap Allow.":"")}</div>
       </div>
     </div>
   </section>`;
 }
 const MIC=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
-function voiceInner(i){
-  const it=S.draft.items[i];
-  if(S.recording&&S.recording.idx===i) return `<span class="rec-dot"></span><span class="timer" id="rectime">0:00</span><span>Recording… talk now</span><button class="btn danger small" type="button" id="recstop">Stop</button>`;
-  if(it.voice) return `<audio controls src="${it.voiceUrl}"></audio><button class="btn ghost small" type="button" data-rmvoice="${i}">Delete</button><button class="btn ghost small" type="button" data-rec="${i}">Record again</button>`;
-  return `<button class="btn primary small" type="button" data-rec="${i}">${MIC}Record voice</button><button class="btn ghost small" type="button" data-pickvoice="${i}">Attach a voice memo</button><span class="hint" id="vhint-${i}">${i===0?"The first time, your phone asks to allow the microphone. Tap Allow.":""}</span>`;
+function voiceTarget(key){
+  if(key[0]==="i") return S.draft.items[+key.slice(1)];
+  const id=key.slice(1); return S.cdraft[id]||(S.cdraft[id]={text:"",voice:null,voiceUrl:null});
+}
+function voiceInner(key,hint){
+  const it=voiceTarget(key);
+  if(S.recording&&S.recording.key===key) return `<span class="rec-dot"></span><span class="timer" id="rectime">0:00</span><span>Recording… talk now</span><button class="btn danger small" type="button" id="recstop">Stop</button>`;
+  if(it&&it.voice) return `<audio controls src="${it.voiceUrl}"></audio><button class="btn ghost small" type="button" data-rmvoice="${key}">Delete</button><button class="btn ghost small" type="button" data-rec="${key}">Record again</button>`;
+  return `<button class="btn primary small" type="button" data-rec="${key}">${MIC}Record voice</button><button class="btn ghost small" type="button" data-pickvoice="${key}">Attach a voice memo</button><span class="hint" id="vhint-${key}">${hint||""}</span>`;
+}
+function voiceBox(key,hint){
+  return `<div class="voice" id="voice-${key}">${voiceInner(key,hint)}</div><input type="file" id="vfile-${key}" data-vfile="${key}" accept="audio/*,.m4a,.mp3,.wav,.ogg,.opus,.aac,.webm" hidden>`;
 }
 
 /* ---------- board ---------- */
 function filtered(){
   const f=S.filters;
   return S.feedback.filter(x=>{
+    if(f.status==="questions") return x.status!=="tackled"&&awaitingAnswer(x)&&(isReviewer()||x.author_id===S.me.id);
     if(f.status==="open"&&x.status==="tackled") return false;
     if(f.status!=="open"&&f.status!=="all"&&x.status!==f.status) return false;
     if(f.person!=="all"&&x.author_id!==f.person) return false;
@@ -454,7 +486,7 @@ function boardHTML(){
     <div class="stat"><b>${c("tackled")}</b><span>tackled</span></div></div>
   <div class="toolbar">
     <div class="field"><label class="lbl" for="flt-status">Status</label><select id="flt-status">
-      ${[["open","Not tackled yet"],["all","Everything"],["new","New"],["progress","In progress"],["tackled","Tackled"]].map(([v,l])=>`<option value="${v}" ${f.status===v?"selected":""}>${l}</option>`).join("")}</select></div>
+      ${[["open","Not tackled yet"],["questions",isReviewer()?"Waiting for an answer":"Questions for me"],["all","Everything"],["new","New"],["progress","In progress"],["tackled","Tackled"]].map(([v,l])=>`<option value="${v}" ${f.status===v?"selected":""}>${l}</option>`).join("")}</select></div>
     <div class="field"><label class="lbl" for="flt-person">From</label><select id="flt-person"><option value="all">Everyone</option>
       ${S.members.map(m=>`<option value="${m.id}" ${f.person===m.id?"selected":""}>${esc(m.name)}</option>`).join("")}</select></div>
   </div>
@@ -478,6 +510,11 @@ function ticketHTML(f){
       if(st!=="tackled") r.push(`<button class="btn primary small" type="button" data-act="tackle" data-id="${f.id}">Mark tackled</button>`);
       else r.push(`<button class="btn ghost small" type="button" data-act="reopen" data-id="${f.id}">Reopen</button>`);
     }
+    if(!S.commentsOff&&S.composer!==f.id){
+      const n=commentsFor(f.id).length;
+      if(isReviewer()) r.push(`<button class="btn ghost small" type="button" data-copen="${f.id}">${n?"Reply":"Ask a question"}</button>`);
+      else if(n&&f.author_id===S.me.id) r.push(`<button class="btn sun small" type="button" data-copen="${f.id}">Answer</button>`);
+    }
     if(canDel) r.push(`<button class="btn ghost small" type="button" data-act="delete" data-id="${f.id}">Delete</button>`);
     actions=r.length?`<div class="actions">${r.join("")}</div>`:"";
   }
@@ -491,14 +528,61 @@ function ticketHTML(f){
       ${f.voice?`<audio controls preload="metadata" src="${esc(mediaUrl(f.voice))}"></audio>`:""}
       ${imgs.length?`<div class="gallery">${imgs.map(p=>`<a href="#" data-img="${esc(p)}"><img loading="lazy" src="${esc(mediaUrl(p))}" alt="Feedback screenshot"></a>`).join("")}</div>`:""}
       ${st==="tackled"?`<div class="resolution"><b>Tackled</b> by ${esc((memberById(f.tackled_by)||{}).name||"a reviewer")}${f.tackled_at?" · "+esc(fmtStamp(f.tackled_at)):""}${f.note?`<br>${esc(f.note)}`:""}</div>`:""}
+      ${threadHTML(f)}
       ${actions}
     </div>
     <div class="stub">
       <span class="pill st-${st}">${STATUS[st]}</span>
+      ${st!=="tackled"&&awaitingAnswer(f)?`<span class="pill st-question">Question open</span>`:""}
       <span class="date">${esc(fmtDay(f.date||today()))}</span>
       <span class="time">sent ${esc(fmtTime(f.created_at))}</span>
       <span class="mono">${esc(ticketNo(f))}</span>
     </div></article>`;
+}
+
+/* ---------- comments: reviewers ask, the person who sent it answers ---------- */
+function commentsFor(id){return S.comments.filter(c=>c.feedback_id===id)}
+function awaitingAnswer(f){const cs=commentsFor(f.id);if(!cs.length)return false;const last=cs[cs.length-1];const lm=memberById(last.author_id);return last.author_id!==f.author_id&&(!lm||lm.role==="reviewer")}
+function questionsForMe(){return S.feedback.filter(f=>f.author_id===S.me.id&&f.status!=="tackled"&&awaitingAnswer(f))}
+function threadHTML(f){
+  const cs=commentsFor(f.id); const open=S.composer===f.id;
+  if(!cs.length&&!open) return "";
+  const d=voiceTarget("c"+f.id);
+  const asker=isReviewer()&&f.author_id!==S.me.id;
+  return `<div class="thread">
+    ${cs.length?`<div class="thread-title">Questions &amp; answers</div>`:""}
+    ${cs.map(c=>{const m=memberById(c.author_id);const nm=m?m.name:(c.author_name||"Someone");const mine=c.author_id===S.me.id;
+      return `<div class="cmt ${c.author_id===f.author_id?"from-author":"from-reviewer"}"><div class="avatar sm ${m&&m.role==="reviewer"?"rev":""}">${esc(initial(nm))}</div>
+        <div class="cmt-body"><div class="cmt-meta"><b>${esc(nm)}</b> <span>${esc(fmtStamp(c.created_at))}</span>${mine||isReviewer()?`<button type="button" class="linkbtn" data-cdel="${c.id}">Delete</button>`:""}</div>
+        ${c.text?`<p class="text">${esc(c.text)}</p>`:""}${c.voice?`<audio controls preload="metadata" src="${esc(mediaUrl(c.voice))}"></audio>`:""}</div></div>`}).join("")}
+    ${open?`<div class="composer">
+      <label class="lbl" for="ctext-${f.id}">${asker&&!cs.length?"Ask for clarification":"Your reply"}</label>
+      <textarea id="ctext-${f.id}" data-ctext="${f.id}" placeholder="${asker?"e.g. Which screen was this on? What phone were you using?":"Type your answer, or record it below"}">${esc(d.text)}</textarea>
+      ${voiceBox("c"+f.id)}
+      <div class="actions"><button class="btn primary small" type="button" data-csend="${f.id}" ${S.cbusy?"disabled":""}>${S.cbusy?"Sending…":"Send"}</button><button class="btn ghost small" type="button" data-cclose="${f.id}">Cancel</button><span class="status-line" id="cmsg-${f.id}"></span></div>
+    </div>`:""}
+  </div>`;
+}
+async function sendComment(fid){
+  keepText();
+  const d=voiceTarget("c"+fid), msg=t=>{const m=document.getElementById("cmsg-"+fid);if(m)m.textContent=t};
+  if(!d.text.trim()&&!d.voice){msg("Type something or record your voice first.");return}
+  S.cbusy=true;render();
+  try{
+    let voicePath=null;
+    if(d.voice) voicePath=await upload(d.voice.blob,"comments",d.voice.name);
+    const {error}=await sb.from("comments").insert({feedback_id:fid,author_id:S.me.id,author_name:S.me.name,text:d.text.trim(),voice:voicePath});
+    if(error) throw error;
+    delete S.cdraft[fid]; S.composer=null;
+    await loadComments(); S.cbusy=false; render(); toast("Sent");
+  }catch(e){console.warn(e);S.cbusy=false;render();const m=document.getElementById("cmsg-"+fid);if(m)m.textContent="Couldn't send. Check your connection and try again."}
+}
+async function deleteComment(id){
+  const c=S.comments.find(x=>x.id===id); if(!c) return;
+  const {error}=await sb.from("comments").delete().eq("id",id);
+  if(error){toast("Couldn't delete");return}
+  if(c.voice) await sb.storage.from(BUCKET).remove([c.voice]).catch(()=>{});
+  await loadComments(); render();
 }
 
 /* ---------- digest ---------- */
@@ -585,9 +669,19 @@ function bind(){
   }
   if(S.tab==="team") bindTeam();
   document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>ticketAction(b.dataset.act,b.dataset.id));
+  document.querySelectorAll("[data-rec]").forEach(b=>b.onclick=()=>startRec(b.dataset.rec));
+  document.querySelectorAll("[data-pickvoice]").forEach(b=>b.onclick=()=>q("vfile-"+b.dataset.pickvoice).click());
+  document.querySelectorAll("[data-rmvoice]").forEach(b=>b.onclick=()=>{keepText();const it=voiceTarget(b.dataset.rmvoice);it.voice=null;it.voiceUrl=null;render()});
+  document.querySelectorAll("[data-vfile]").forEach(v=>v.onchange=()=>{if(v.files[0])setVoice(v.dataset.vfile,v.files[0],v.files[0].name)});
+  document.querySelectorAll("[data-ctext]").forEach(t=>t.oninput=()=>{voiceTarget("c"+t.dataset.ctext).text=t.value});
+  document.querySelectorAll("[data-copen]").forEach(b=>b.onclick=()=>{keepText();S.composer=b.dataset.copen;render();setTimeout(()=>document.getElementById("ctext-"+b.dataset.copen)?.focus(),30)});
+  document.querySelectorAll("[data-cclose]").forEach(b=>b.onclick=()=>{keepText();S.composer=null;render()});
+  document.querySelectorAll("[data-csend]").forEach(b=>b.onclick=()=>sendComment(b.dataset.csend));
+  document.querySelectorAll("[data-cdel]").forEach(b=>b.onclick=()=>deleteComment(b.dataset.cdel));
+  const qb=q("goto-questions"); if(qb) qb.onclick=()=>{S.tab="board";S.filters.status="questions";render();window.scrollTo(0,0)};
   document.querySelectorAll("[data-img]").forEach(a=>a.onclick=e=>{e.preventDefault();openLightbox(a.dataset.img)});
 }
-function keepText(){document.querySelectorAll("[data-text]").forEach(t=>{const it=S.draft.items[+t.dataset.text];if(it)it.text=t.value})}
+function keepText(){document.querySelectorAll("[data-text]").forEach(t=>{const it=S.draft.items[+t.dataset.text];if(it)it.text=t.value});document.querySelectorAll("[data-ctext]").forEach(t=>{voiceTarget("c"+t.dataset.ctext).text=t.value})}
 function bindGive(){
   const q=id=>document.getElementById(id);
   q("f-date").onchange=e=>{S.draft.date=e.target.value||today()};
@@ -602,10 +696,6 @@ function bindGive(){
   });
   document.querySelectorAll("[data-rmimg]").forEach(b=>b.onclick=()=>{keepText();S.draft.items[+b.dataset.rmimg].image=null;render()});
   document.querySelectorAll("[data-rmitem]").forEach(b=>b.onclick=()=>{keepText();S.draft.items.splice(+b.dataset.rmitem,1);render()});
-  document.querySelectorAll("[data-rec]").forEach(b=>b.onclick=()=>startRec(+b.dataset.rec));
-  document.querySelectorAll("[data-pickvoice]").forEach(b=>b.onclick=()=>q("vfile-"+b.dataset.pickvoice).click());
-  document.querySelectorAll("[data-rmvoice]").forEach(b=>b.onclick=()=>{keepText();const it=S.draft.items[+b.dataset.rmvoice];it.voice=null;it.voiceUrl=null;render()});
-  S.draft.items.forEach((it,i)=>{const v=q("vfile-"+i);if(v)v.onchange=()=>{if(v.files[0])setVoice(i,v.files[0],v.files[0].name)}});
   const add=q("additem"); if(add) add.onclick=()=>{keepText();S.draft.items.push(newItem());render();setTimeout(()=>{const els=document.querySelectorAll(".point");els[els.length-1]?.scrollIntoView({behavior:"smooth",block:"start"})},50)};
   q("send").onclick=send;
 }
@@ -649,11 +739,11 @@ function shrink(file){
 }
 
 /* voice: real microphone recording, sound only, one per point */
-function setVoice(i,blob,name){keepText();const it=S.draft.items[i];it.voice={blob,name};it.voiceUrl=URL.createObjectURL(blob);render()}
-async function startRec(i){
+function setVoice(key,blob,name){keepText();const it=voiceTarget(key);it.voice={blob,name};it.voiceUrl=URL.createObjectURL(blob);render()}
+async function startRec(key){
   keepText();
   if(S.recording) return;
-  const hint=t=>{const h=document.getElementById("vhint-"+i);if(h)h.textContent=t};
+  const hint=t=>{const h=document.getElementById("vhint-"+key);if(h)h.textContent=t};
   if(!navigator.mediaDevices||!window.MediaRecorder){hint("This browser can't record. Open the link in Safari or Chrome, or attach a voice memo.");return}
   let stream;
   try{stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false})}
@@ -668,11 +758,11 @@ async function startRec(i){
   rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
   rec.onstop=()=>{stream.getTracks().forEach(t=>t.stop());clearInterval(S.recording.tick);S.recording=null;
     const type=(rec.mimeType||mime||"audio/webm").split(";")[0];
-    setVoice(i,new Blob(chunks,{type}),"voice-note")};
+    setVoice(key,new Blob(chunks,{type}),"voice-note")};
   const t0=Date.now();
-  S.recording={idx:i,rec,tick:setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);const el=document.getElementById("rectime");if(el)el.textContent=`${Math.floor(s/60)}:${pad(s%60)}`;if(s>=600)stopRec()},500)};
+  S.recording={key,rec,tick:setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);const el=document.getElementById("rectime");if(el)el.textContent=`${Math.floor(s/60)}:${pad(s%60)}`;if(s>=600)stopRec()},500)};
   rec.start(1000);
-  document.getElementById("voice-"+i).innerHTML=voiceInner(i);
+  document.getElementById("voice-"+key).innerHTML=voiceInner(key);
   document.getElementById("recstop").onclick=stopRec;
 }
 function stopRec(){if(S.recording&&S.recording.rec.state!=="inactive")S.recording.rec.stop()}
@@ -733,7 +823,7 @@ async function ticketAction(act,id){
       r=await sb.from("feedback").update({status:"tackled",tackled_by:S.me.id,tackled_at:new Date().toISOString(),note}).eq("id",id);if(!r.error)toast("Marked as tackled")}
     if(act==="del-ok"){const f=S.feedback.find(x=>x.id===id);S.confirm=null;
       r=await sb.from("feedback").delete().eq("id",id);
-      if(!r.error&&f){const paths=[...(f.images||[]),f.voice].filter(Boolean);if(paths.length)await sb.storage.from(BUCKET).remove(paths).catch(()=>{});toast("Feedback deleted")}}
+      if(!r.error&&f){const paths=[...(f.images||[]),f.voice,...commentsFor(f.id).map(c=>c.voice)].filter(Boolean);if(paths.length)await sb.storage.from(BUCKET).remove(paths).catch(()=>{});toast("Feedback deleted")}}
     if(r&&r.error) throw r.error;
     await loadFeedback();
   }catch(e){console.warn(e);toast("Couldn't update. Check your connection.")}
